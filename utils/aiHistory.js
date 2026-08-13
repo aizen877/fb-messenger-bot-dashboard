@@ -4,7 +4,7 @@ const path = require("path");
 const DATA_DIR = path.join(__dirname, "../data");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
 
-const MAX_HISTORY = 20; // Keep up to 20 recent messages per thread for full context awareness
+const MAX_HISTORY = 8; // Keep 8 recent messages for sharp, clean context without clutter
 const historyStore = new Map();
 
 // Ensure data directory exists
