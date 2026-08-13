@@ -261,9 +261,10 @@ function createDashboardServer({ getBotInstance, onAppStateUpdate, onRestartBot 
   });
 
   const port = process.env.PORT || 3000;
-  const server = app.listen(port, () => {
-    console.log(`🌐 [Web Dashboard Server]: Listening live at http://localhost:${port}`);
-    console.log(`🏥 [Koyeb Health Probe]: Live at http://localhost:${port}/health`);
+  const host = "0.0.0.0";
+  const server = app.listen(port, host, () => {
+    console.log(`🌐 [Web Dashboard Server]: Listening live on http://${host}:${port}`);
+    console.log(`🏥 [Koyeb Health Probe]: Live on http://${host}:${port}/health`);
   });
 
   return server;
