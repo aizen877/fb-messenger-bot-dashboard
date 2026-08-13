@@ -1,9 +1,12 @@
+const { formatTree } = require("../utils/helpers");
+
 module.exports = {
   name: "adminlist",
   aliases: ["admins", "admin"],
   description: "Fetch and list all admins of the current group",
   category: "group",
-  async execute({ bot, ctx, getThreadDetails, getUserName, sendHumanReply }) {
+  async execute({ ctx, getThreadDetails, getUserName, sendHumanReply, formatTree: ctxFormatTree }) {
+    const fmtTree = ctxFormatTree || formatTree;
     try {
       const threadID = ctx.threadID;
       if (!threadID) {
@@ -17,17 +20,29 @@ module.exports = {
         return await sendHumanReply(ctx, "⚠️ কোনো এডমিন তালিকা পাওয়া যায়নি অথবা এটি একটি পার্সোনাল চ্যাট।");
       }
 
-      const adminNames = [];
+      const adminItems = [];
       for (let i = 0; i < adminIDs.length; i++) {
         const uid = adminIDs[i];
         const name = await getUserName(uid);
-        adminNames.push(`${i + 1}. ${name} [${uid}]`);
+        adminItems.push(`${i + 1}. ${name} (${uid})`);
       }
 
-      const replyMsg = 
-        `🛡️ *Group Admin List (${adminIDs.length})*\n` +
-        `📌 *Group:* ${details.name}\n\n` +
-        adminNames.join("\n");
+      const sections = [
+        {
+          title: "Group Overview",
+          items: [
+            `Group Name: ${details.name || "Chat Thread"}`,
+            `Thread ID: ${threadID}`,
+            `Total Admins: ${adminIDs.length}`
+          ]
+        },
+        {
+          title: "Group Admins",
+          items: adminItems
+        }
+      ];
+
+      const replyMsg = fmtTree("🛡️ GROUP ADMIN LIST", sections);
 
       await sendHumanReply(ctx, replyMsg);
     } catch (err) {
@@ -36,3 +51,4 @@ module.exports = {
     }
   }
 };
+

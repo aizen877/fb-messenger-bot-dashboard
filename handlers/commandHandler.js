@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { sendHumanReply } = require("../utils/antiDetect");
-const { SUPER_ADMIN_ID, getThreadAdminIDs, getThreadDetails, getUserName, isBotAdmin, downloadTempImage } = require("../utils/helpers");
+const { SUPER_ADMIN_ID, getThreadAdminIDs, getThreadDetails, getUserName, getDetailedUserInfo, isBotAdmin, downloadTempImage, formatTree } = require("../utils/helpers");
 
 /**
  * Dynamically loads and registers all command files from the commands directory
@@ -17,6 +17,7 @@ function loadCommands(bot, commandPrefix = "/") {
 
   const files = fs.readdirSync(commandsDir).filter((f) => f.endsWith(".js"));
   let loadedCount = 0;
+  const registeredTriggers = new Set();
 
   for (const file of files) {
     try {
@@ -33,7 +34,14 @@ function loadCommands(bot, commandPrefix = "/") {
       const names = [cmd.name, ...(cmd.aliases || [])];
       
       names.forEach((cmdName) => {
-        bot.command(cmdName, async (ctx) => {
+        const lowerName = cmdName.toLowerCase();
+        if (registeredTriggers.has(lowerName)) {
+          console.warn(`⚠️ Duplicate command trigger / alias '${lowerName}' in ${file} skipped.`);
+          return;
+        }
+        registeredTriggers.add(lowerName);
+
+        bot.command(lowerName, async (ctx) => {
           try {
             const rawText = ctx.text || "";
             const parts = rawText.split(/\s+/);
@@ -48,12 +56,14 @@ function loadCommands(bot, commandPrefix = "/") {
               getThreadAdminIDs: (a1, a2) => getThreadAdminIDs(bot, typeof a1 === "string" ? a1 : a2),
               getThreadDetails: (a1, a2) => getThreadDetails(bot, typeof a1 === "string" ? a1 : a2),
               getUserName: (a1, a2, a3) => getUserName(bot, typeof a1 === "string" ? a1 : a2, typeof a2 === "string" ? a2 : a3 || ctx.threadID),
+              getDetailedUserInfo: (a1, a2) => getDetailedUserInfo(bot, typeof a1 === "string" ? a1 : a2),
               isBotAdmin: (a1, a2) => isBotAdmin(bot, typeof a1 === "string" ? a1 : a2 || ctx.threadID),
+              formatTree,
               SUPER_ADMIN_ID,
               downloadTempImage
             });
           } catch (err) {
-            console.error(`❌ Error executing command /${cmdName}:`, err.message);
+            console.error(`❌ Error executing command /${lowerName}:`, err.message);
           }
         });
       });

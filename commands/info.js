@@ -1,3 +1,5 @@
+const { formatTree } = require("../utils/helpers");
+
 module.exports = {
   name: "info",
   aliases: [],
@@ -5,7 +7,26 @@ module.exports = {
   category: "general",
   async execute({ bot, ctx, sendHumanReply }) {
     const botID = bot.api?.getCurrentUserID() || "Unknown";
-    const infoMsg = `ℹ️ *Bot System Info*\n• Logged In ID: ${botID}\n• Status: Online & Active\n• Anti-Detection Caching: Enabled`;
+    const mainTitle = "ℹ️ BOT SYSTEM INFO";
+    const sections = [
+      {
+        title: "Session Status",
+        items: [
+          `Logged In ID: ${botID}`,
+          `Status: Online & Active 🟢`
+        ]
+      },
+      {
+        title: "Security & Anti-Detection",
+        items: [
+          `Stealth Mode: Enabled 🛡️`,
+          `Human Delay Caching: Active ⏱️`,
+          `Rate-Limit Guard: Active ⚡`
+        ]
+      }
+    ];
+    const infoMsg = formatTree(mainTitle, sections);
     await sendHumanReply(ctx, infoMsg);
   }
 };
+

@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { formatTree } = require("../utils/helpers");
 
 module.exports = {
   name: "help",
@@ -30,41 +31,40 @@ module.exports = {
         } catch (e) {}
       }
 
-      let helpMsg = `🤖 *Messenger Bot Commands Menu*\n📌 Prefix: "${commandPrefix}"\n\n`;
+      const mainTitle = `🤖 MESSENGER BOT COMMANDS MENU\nPrefix: "${commandPrefix}"`;
+      const sections = [];
 
       const aiAndFun = [...(categories.ai || []), ...(categories.fun || [])];
       if (aiAndFun.length > 0) {
-        helpMsg += `🧠 *AI & Fun Commands:*\n`;
-        aiAndFun.forEach((c) => {
-          helpMsg += `• ${commandPrefix}${c.name} - ${c.description}\n`;
+        sections.push({
+          title: "AI & Fun Commands",
+          items: aiAndFun.map((c) => `${commandPrefix}${c.name} - ${c.description}`)
         });
-        helpMsg += `\n`;
       }
 
       if (categories.group && categories.group.length > 0) {
-        helpMsg += `👥 *Group Commands:*\n`;
-        categories.group.forEach((c) => {
-          helpMsg += `• ${commandPrefix}${c.name} - ${c.description}\n`;
+        sections.push({
+          title: "Group Commands",
+          items: categories.group.map((c) => `${commandPrefix}${c.name} - ${c.description}`)
         });
-        helpMsg += `\n`;
       }
 
       if (categories.admin && categories.admin.length > 0) {
-        helpMsg += `👑 *Admin Commands:*\n`;
-        categories.admin.forEach((c) => {
-          helpMsg += `• ${commandPrefix}${c.name} - ${c.description}\n`;
+        sections.push({
+          title: "Admin Commands",
+          items: categories.admin.map((c) => `${commandPrefix}${c.name} - ${c.description}`)
         });
-        helpMsg += `\n`;
       }
 
       if (categories.general && categories.general.length > 0) {
-        helpMsg += `📌 *General Utilities:*\n`;
-        categories.general.forEach((c) => {
-          helpMsg += `• ${commandPrefix}${c.name} - ${c.description}\n`;
+        sections.push({
+          title: "General Utilities",
+          items: categories.general.map((c) => `${commandPrefix}${c.name} - ${c.description}`)
         });
       }
 
-      helpMsg += `\n💡 বোটের যেকোনো মেসেজে সরাসরি Reply দিয়ে কথা বলতে পারেন!`;
+      const footer = "💡 Tip: বোটের যেকোনো মেসেজে সরাসরি Reply দিয়ে যা ইচ্ছা জিজ্ঞেস করুন!";
+      const helpMsg = formatTree(mainTitle, sections, footer);
 
       await sendHumanReply(ctx, helpMsg);
     } catch (err) {
@@ -72,3 +72,4 @@ module.exports = {
     }
   }
 };
+

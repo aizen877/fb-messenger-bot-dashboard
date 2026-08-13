@@ -1,6 +1,6 @@
 module.exports = {
   name: "promote",
-  aliases: ["admin"],
+  aliases: ["addadmin", "makeadmin"],
   description: "Promote member to Group Admin",
   category: "admin",
   async execute({ bot, ctx, args, getThreadAdminIDs, SUPER_ADMIN_ID, getUserName, sendHumanReply }) {

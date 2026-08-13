@@ -1,4 +1,5 @@
 const { AVAILABLE_MODELS, DEFAULT_MODEL, getActiveModel, setActiveModel, resetModel } = require("../utils/modelStore");
+const { formatTree } = require("../utils/helpers");
 
 module.exports = {
   name: "model",
@@ -47,18 +48,28 @@ module.exports = {
         }
       }
 
-      // Case 3: Display Available Models List
-      let listMsg = `🤖 *Available AI Models List*\n\n`;
-      listMsg += `📌 *বর্তমান অ্যাক্টিভ মডেল:* ${currentActive}\n\n`;
-      listMsg += `মডেল পরিবর্তন করতে নিচের নম্বরে কমান্ড দিন:\n`;
-      listMsg += `উদাহরণ: /model 2  বা  /model 3\n\n`;
-
-      AVAILABLE_MODELS.forEach((m) => {
+      // Case 3: Display Available Models List via formatTree
+      const modelItems = AVAILABLE_MODELS.map((m) => {
         const isCurrent = m.name === currentActive ? " 👈 [Active]" : "";
-        listMsg += `[${m.id}] ${m.label}${isCurrent}\n`;
+        return `[${m.id}] ${m.label}${isCurrent}`;
       });
 
-      listMsg += `\n💡 মডেল রিসেট করতে: /model reset`;
+      const mainTitle = "🤖 AI MODEL CONFIGURATION";
+      const sections = [
+        {
+          title: "Active Selection",
+          items: [
+            `Current Model: ${currentActive}`
+          ]
+        },
+        {
+          title: "Available AI Models",
+          items: modelItems
+        }
+      ];
+      const footer = "💡 Usage: /model <number> (e.g. /model 2) | Reset: /model reset";
+
+      const listMsg = formatTree(mainTitle, sections, footer);
 
       await sendHumanReply(ctx, listMsg);
     } catch (err) {
@@ -67,3 +78,4 @@ module.exports = {
     }
   }
 };
+

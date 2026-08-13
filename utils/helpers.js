@@ -91,18 +91,18 @@ function getUserName(bot, userID, threadID = "") {
 function parseThreadInfoObject(info) {
   if (!info) return null;
 
-  const adminIDs = extractIDs(info.adminIDs || info.admin_ids || info.threadAdmins || info.thread_admins);
-  let participantIDs = extractIDs(info.participantIDs || info.participant_ids || info.members || info.recipients);
+  const adminIDs = extractIDs(info.adminIDs || info.admin_ids || info.threadAdmins || info.thread_admins || info.admins);
+  let participantIDs = extractIDs(info.participantIDs || info.participant_ids || info.members || info.recipients || info.participants);
 
-  const userInfo = Array.isArray(info.userInfo) ? info.userInfo : [];
+  const userInfo = Array.isArray(info.userInfo) ? info.userInfo : (Array.isArray(info.user_info) ? info.user_info : []);
 
   for (const u of userInfo) {
-    if (u && u.id) {
-      const uID = String(u.id);
+    if (u && (u.id || u.userID || u.user_id)) {
+      const uID = String(u.id || u.userID || u.user_id);
       if (u.name || u.firstName) {
         cacheUserName(uID, u.name || u.firstName);
       }
-      if ((u.type === "admin" || u.isAdmin || u.isGroupAdmin) && !adminIDs.includes(uID)) {
+      if ((u.type === "admin" || u.isAdmin || u.isGroupAdmin || u.admin) && !adminIDs.includes(uID)) {
         adminIDs.push(uID);
       }
       if (!participantIDs.includes(uID)) {
@@ -112,7 +112,7 @@ function parseThreadInfoObject(info) {
   }
 
   return {
-    name: info.threadName || info.name || "Chat Thread",
+    name: info.threadName || info.name || info.title || "Chat Thread",
     participantIDs,
     adminIDs,
     userInfo
@@ -253,7 +253,7 @@ function downloadTempImage(url, tempPath) {
         }
         if (res.statusCode !== 200) {
           fileStream.close();
-          fs.unlink(tempPath, () => {});
+          fs.unlink(tempPath, () => { });
           return reject(new Error(`HTTP ${res.statusCode}`));
         }
         res.pipe(fileStream);
@@ -263,9 +263,96 @@ function downloadTempImage(url, tempPath) {
         });
       })
       .on("error", (err) => {
-        fs.unlink(tempPath, () => {});
+        fs.unlink(tempPath, () => { });
         reject(err);
       });
+  });
+}
+
+/**
+ * Format structured data into standard box tree format
+ * @param {string} mainTitle - Main header title
+ * @param {Array<{title: string, items: Array<string>}>} sections - Array of sections with titles and item strings
+ * @param {string} [footer] - Optional footer note
+ * @returns {string}
+ */
+function formatTree(mainTitle, sections, footer = "") {
+  let result = `✨ ${mainTitle} ✨\n`;
+  sections.forEach((section) => {
+    if (!section || !section.items || section.items.length === 0) return;
+    result += `\n─── ${section.title.toUpperCase()} ───\n`;
+    section.items.forEach((item) => {
+      // Clean up item if it already starts with bullet
+      const cleanItem = String(item).replace(/^[•\-└├]\s*/, "");
+      result += `• ${cleanItem}\n`;
+    });
+  });
+  if (footer) {
+    result += `\n${footer}`;
+  }
+  return result.trim();
+}
+
+/**
+ * Helper to fetch complete user info object safely
+ * @param {object} bot - MessengerBot instance
+ * @param {string} userID - Facebook User ID
+ * @returns {Promise<object>}
+ */
+function getDetailedUserInfo(bot, userID) {
+  return new Promise((resolve) => {
+    const fallback = {
+      userID: String(userID || ""),
+      name: `User ${userID || ""}`,
+      firstName: "",
+      vanity: "",
+      gender: "Unspecified",
+      isFriend: false,
+      isBirthday: false,
+      type: "user",
+      profileUrl: `https://facebook.com/${userID || ""}`
+    };
+
+    if (!userID) return resolve(fallback);
+    const uidStr = String(userID);
+
+    if (bot && bot.api && typeof bot.api.getUserInfo === "function") {
+      try {
+        bot.api.getUserInfo(uidStr, (err, ret) => {
+          if (!err && ret && ret[uidStr]) {
+            const uData = ret[uidStr];
+            const name = uData.name || uData.firstName || uData.alternateName || fallback.name;
+            cacheUserName(uidStr, name);
+
+            let genderText = "Unspecified";
+            if (uData.gender === 1 || uData.gender === "female" || uData.gender === "FEMALE") genderText = "Female";
+            else if (uData.gender === 2 || uData.gender === "male" || uData.gender === "MALE") genderText = "Male";
+            else if (typeof uData.gender === "string" && uData.gender) genderText = uData.gender;
+
+            return resolve({
+              userID: uidStr,
+              name,
+              firstName: uData.firstName || "",
+              vanity: uData.vanity || uData.username || "",
+              gender: genderText,
+              isFriend: Boolean(uData.isFriend),
+              isBirthday: Boolean(uData.isBirthday),
+              type: uData.type || "user",
+              profileUrl: uData.profileUrl || `https://facebook.com/${uidStr}`
+            });
+          }
+          resolve(fallback);
+        });
+        return;
+      } catch (e) {
+        return resolve(fallback);
+      }
+    }
+
+    if (userNameCache.has(uidStr)) {
+      fallback.name = userNameCache.get(uidStr);
+    }
+    resolve(fallback);
   });
 }
 
@@ -274,7 +361,10 @@ module.exports = {
   getThreadAdminIDs,
   getThreadDetails,
   getUserName,
+  getDetailedUserInfo,
   cacheUserName,
   isBotAdmin,
-  downloadTempImage
+  downloadTempImage,
+  formatTree
 };
+

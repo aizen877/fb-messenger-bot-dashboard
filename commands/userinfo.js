@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { getDetailedUserInfo, formatTree } = require("../utils/helpers");
 
 module.exports = {
   name: "userinfo",
@@ -19,29 +20,52 @@ module.exports = {
         targetID = Object.keys(ctx.event.mentions)[0];
       }
 
-      // Safe user name & info resolution without triggering FB session blocks
-      const mentions = ctx.event?.mentions || {};
-      let name = mentions[targetID] ? mentions[targetID].replace(/^@/, "") : "";
+      // Fetch rich metadata using helper
+      const uInfo = await getDetailedUserInfo(bot, targetID);
 
-      if (!name && getUserName) {
-        try {
-          name = await getUserName(targetID);
-        } catch (e) {
-          name = `User ${targetID}`;
+      // If mentions had name override and uInfo didn't get full name
+      const mentions = ctx.event?.mentions || {};
+      if (mentions[targetID]) {
+        const mentionName = mentions[targetID].replace(/^@/, "");
+        if (mentionName && (!uInfo.name || uInfo.name.startsWith("User "))) {
+          uInfo.name = mentionName;
         }
       }
 
-      const profileLink = `https://facebook.com/${targetID}`;
       // Full resolution (HD 1000x1000) profile picture via Facebook Graph API
       const avatarUrl = `https://graph.facebook.com/${targetID}/picture?height=1000&width=1000&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
-
       const tempImgPath = path.join(__dirname, `../temp_avatar_${targetID}_${Date.now()}.jpg`);
 
-      const userInfoMsg = 
-        `👤 *User Profile Info*\n\n` +
-        `• Name: ${name}\n` +
-        `• User ID: ${targetID}\n` +
-        `• Profile: ${profileLink}`;
+      const mainTitle = "👤 USER PROFILE INFO";
+      const sections = [
+        {
+          title: "Basic Details",
+          items: [
+            `Full Name: ${uInfo.name}`,
+            `First Name: ${uInfo.firstName || "N/A"}`,
+            `User ID: ${uInfo.userID}`,
+            `Username / Vanity: ${uInfo.vanity ? `@${uInfo.vanity}` : "None"}`,
+            `Gender: ${uInfo.gender}`
+          ]
+        },
+        {
+          title: "Status & Relationship",
+          items: [
+            `Account Type: ${uInfo.type}`,
+            `Friend Status: ${uInfo.isFriend ? "Friends 🤝" : "Not Friends 👤"}`,
+            `Birthday Today: ${uInfo.isBirthday ? "Yes 🎉🎂" : "No ❌"}`
+          ]
+        },
+        {
+          title: "Profile Links & Media",
+          items: [
+            `Profile Link: ${uInfo.profileUrl}`,
+            `HD Avatar: Attached Below 📸`
+          ]
+        }
+      ];
+
+      const userInfoMsg = formatTree(mainTitle, sections);
 
       let payload = userInfoMsg;
       try {
@@ -68,3 +92,4 @@ module.exports = {
     }
   }
 };
+

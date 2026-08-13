@@ -1,9 +1,12 @@
+const { formatTree } = require("../utils/helpers");
+
 module.exports = {
   name: "groupinfo",
   aliases: ["gcinfo", "members", "memberlist"],
   description: "Display group information, total members count, and admin overview",
   category: "group",
-  async execute({ bot, ctx, getThreadDetails, getUserName, sendHumanReply }) {
+  async execute({ ctx, getThreadDetails, getUserName, sendHumanReply, formatTree: ctxFormatTree }) {
+    const fmtTree = ctxFormatTree || formatTree;
     try {
       const threadID = ctx.threadID;
       if (!threadID) {
@@ -14,26 +17,38 @@ module.exports = {
       const totalMembers = details.participantIDs ? details.participantIDs.length : 0;
       const totalAdmins = details.adminIDs ? details.adminIDs.length : 0;
 
-      let msg = 
-        `👥 *Group Information*\n\n` +
-        `📌 *Group Name:* ${details.name}\n` +
-        `🆔 *Thread ID:* ${threadID}\n` +
-        `👤 *Total Members:* ${totalMembers}\n` +
-        `🛡️ *Total Admins:* ${totalAdmins}\n\n`;
+      const sections = [
+        {
+          title: "Basic Details",
+          items: [
+            `Group Name: ${details.name || "Chat Thread"}`,
+            `Thread ID: ${threadID}`,
+            `Total Members: ${totalMembers}`,
+            `Total Admins: ${totalAdmins}`
+          ]
+        }
+      ];
 
       if (details.adminIDs && details.adminIDs.length > 0) {
-        msg += `🛡️ *Group Admins:*\n`;
+        const adminItems = [];
         for (let i = 0; i < details.adminIDs.length; i++) {
           const uID = details.adminIDs[i];
           const uName = await getUserName(uID);
-          msg += `• ${uName} (${uID})\n`;
+          adminItems.push(`${i + 1}. ${uName} (${uID})`);
         }
+        sections.push({
+          title: "Group Admins",
+          items: adminItems
+        });
       }
 
-      await sendHumanReply(ctx, msg);
+      const replyMsg = fmtTree("👥 GROUP INFORMATION", sections);
+
+      await sendHumanReply(ctx, replyMsg);
     } catch (err) {
       console.error("Groupinfo command error:", err.message);
       await sendHumanReply(ctx, `❌ গ্রুপ ইনফরমেশন পেতে সমস্যা হয়েছে: ${err.message}`);
     }
   }
 };
+
