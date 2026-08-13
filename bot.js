@@ -164,7 +164,7 @@ async function startBotSession(newAppStateData) {
       if (ctx.threadID && bodyText && !bodyText.startsWith(activePrefix)) {
         try {
           const senderName = await getUserName(bot, sender);
-          addBackgroundMessage(ctx.threadID, senderName, bodyText);
+          addBackgroundMessage(ctx.threadID, senderName, sender, bodyText);
         } catch (e) {}
       }
 

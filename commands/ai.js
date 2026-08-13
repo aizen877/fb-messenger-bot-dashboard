@@ -1,5 +1,5 @@
 const https = require("https");
-const { getHistory, addHistory, clearHistory } = require("../utils/aiHistory");
+const { getHistory, addHistory, clearHistory, updateThreadMetadata, getThreadData } = require("../utils/aiHistory");
 const { getActiveModel } = require("../utils/modelStore");
 const { getThreadDetails } = require("../utils/helpers");
 
@@ -195,74 +195,112 @@ async function processAIRequest({ bot, ctx, rawText, getUserName, sendHumanReply
   const threadHistory = getHistory(threadID);
   const activeModel = getActiveModel(threadID);
 
-  // Fetch Group Context Details (Member names & count, Admin names, Group Name) for AI Awareness
+  // Fetch Group Context Details (Member names & count, Admin names, Group Name) for AI Awareness & JSON Storage
   let groupContextInfo = "";
+  let groupDetails = {
+    groupName: "Messenger Group",
+    threadType: "group",
+    totalMembers: 0,
+    adminNames: [],
+    memberNames: []
+  };
+
   try {
     const details = await getThreadDetails(bot, threadID);
     if (details && details.participantIDs && details.participantIDs.length > 0) {
       const memberNames = [];
       const sliceP = details.participantIDs.slice(0, 15);
-      for (const pID of sliceP) {
+      for (const rawPID of sliceP) {
+        const pID = typeof rawPID === "object" ? (rawPID?.id || rawPID?.userID || rawPID?.user_id || rawPID?.item || "") : rawPID;
+        if (!pID || String(pID) === "[object Object]") continue;
         const name = (getUserName && pID) ? await getUserName(bot, pID, threadID) : `User ${pID}`;
-        memberNames.push(name);
+        if (name && !name.includes("[object Object]")) {
+          memberNames.push(name);
+        }
       }
 
       const adminNames = [];
       if (details.adminIDs && details.adminIDs.length > 0) {
-        for (const aID of details.adminIDs) {
+        for (const rawAID of details.adminIDs) {
+          const aID = typeof rawAID === "object" ? (rawAID?.id || rawAID?.userID || rawAID?.user_id || rawAID?.item || "") : rawAID;
+          if (!aID || String(aID) === "[object Object]") continue;
           const aName = (getUserName && aID) ? await getUserName(bot, aID, threadID) : `User ${aID}`;
-          adminNames.push(aName);
+          if (aName && !aName.includes("[object Object]")) {
+            adminNames.push(aName);
+          }
         }
       }
 
+      groupDetails = {
+        groupName: details.name || "Messenger Group",
+        threadType: details.isGroup ? "group" : "private",
+        totalMembers: details.participantIDs.length,
+        adminNames,
+        memberNames
+      };
+
       groupContextInfo = 
-        `- Group Name: "${details.name}"\n` +
-        `- Total Members Count: ${details.participantIDs.length}\n` +
+        `📌 ACTIVE CHAT & GROUP METADATA CONTEXT:\n` +
+        `- Group Name: "${groupDetails.groupName}"\n` +
+        `- Chat Type: ${groupDetails.threadType === "group" ? "Group Chat" : "Direct Message (DM)"}\n` +
+        `- Total Members Count: ${groupDetails.totalMembers}\n` +
         `- Group Member Names List: ${memberNames.join(", ")}\n` +
         `- Group Admin Names List: ${adminNames.length > 0 ? adminNames.join(", ") : "Normal members"}\n`;
     }
   } catch (e) {}
 
-  // System Prompt tuned for an ULTRA FUNNY, WITTY, ENTERTAINING, and Adda-Master Bangladeshi human persona
+  // Update thread JSON metadata (Group Name, Members, Admins)
+  updateThreadMetadata(threadID, groupDetails);
+
+  // System Prompt tuned for a SHORT, FUNNY, CONCISE Bangladeshi human persona using "তুই"
   const systemPrompt = {
     role: "system",
     content: 
-      `You are ${botName}, an ULTRA FUNNY, WITTY, HILARIOUS, and friendly Bangladeshi guy chatting naturally in a Messenger group!\n` +
+      `You are ${botName}, a funny, witty, mischievous, short-replying Bangladeshi guy chatting naturally in a Messenger group!\n` +
       `Identity & Owner Info:\n` +
-      `- Your character name: ${botName}\n` +
-      `- Your Facebook profile account name: Alamin (ID: 100093356786348). You are running on Alamin's Facebook account.\n` +
-      `- Your Master, Developer, Boss, and Big Brother: ${ownerName} (Sihab / Sihab Hossan) [Facebook User ID: ${ownerID}]. Always give highest respect, love, and hilarious loyalty to Sihab bhai.\n` +
-      `Group Knowledge:\n` +
+      `- Character name: ${botName}\n` +
+      `- Running on Facebook account: Alamin (ID: 100093356786348).\n` +
+      `- Boss & Developer: ${ownerName} (Sihab / Sihab Hossan) [ID: ${ownerID}]. Always give love and loyalty to Sihab bhai.\n` +
+      `Group Knowledge & Full Memory Awareness:\n` +
       `${groupContextInfo}` +
-      `Notice: You HAVE full access to both group members AND group admins listed above! NEVER claim you don't have access or info about admins or members. If anyone asks for admins or members, tell them the names listed above.\n` +
-      `Group History Context Rules (VERY IMPORTANT - DO NOT GET CONFUSED):\n` +
-      `- Every message in history is tagged with the speaker's name like "[Sender Name]: message".\n` +
+      `Notice: You HAVE full access to both group members AND group admins listed above! NEVER claim you don't have access or info about admins or members. Always use this group knowledge when asked.\n` +
+      `Group History Context Rules:\n` +
+      `- Every message in history is tagged with the speaker's name and ID.\n` +
       `- Assistant messages are YOUR past responses (${botName}).\n` +
-      `- Always track WHO said WHAT carefully so history context remains crystal clear and never gets mixed up or messy (no hojoborolo!).\n` +
-      `- Only focus on the latest context topic and reply naturally.\n` +
+      `- Pay careful attention to who said what so history context stays clean.\n` +
       `AI Agent Tool Ability:\n` +
-      `If the user asks you to change a nickname (e.g. "আমার নিকনেম দাও X", "ওকে নিকনেম দাও Y", "এর নিকনেম বদলে Z রাখো", "নিকনেম বদলে দাও"), include an action tag at the end of your response: [ACTION:nickname(name="NEW_NICKNAME_HERE")]. If they ask to reset/clear nickname, use: [ACTION:nickname(name="")].\n` +
-      `Language & Script Mirroring Rules (CRITICAL):\n` +
-      `- IF the user message is written in BANGLISH (Bengali with English letters e.g. "kemon achen bhai", "ki obostha", "kotha bolo"), you MUST reply in BANGLISH (e.g. "Arey Sihab bro! Walaikum Assalam, ki obostha mama? Ami to full chill mood e achi, tumi bolo!")!\n` +
-      `- IF the user message is written in BANGLA SCRIPT (বাংলা হরফ e.g. "কেমন আছেন ভাই", "কি অবস্থা"), you MUST reply in BANGLA SCRIPT (e.g. "আরে শিহাব ব্রো! ওয়া আলাইকুমুস সালাম, কী অবস্থা মামা? আমি তো ফুল চিল মোডে আছি, তুমি বলো!")!\n` +
-      `- IF the user message is written in ENGLISH (e.g. "How are you?"), you MUST reply in ENGLISH (e.g. "Walaikum Assalam bro! I'm chilling, what's up with you?")!\n` +
-      `Strict Personality, Tone & Humor Instructions:\n` +
-      `1. Be ULTRA FUNNY, WITTY & ENTERTAINING (অত্যন্ত মজার, চরম রসাত্মক, হাস্যাস্পদ ও চরম বিনোদনমূলক)। Use friendly Bangladeshi humor, clever witty punchlines, lighthearted friendly roasting, funny metaphors, and hilarious adda comments.\n` +
-      `2. Talk like a REAL HUMAN FRIEND & ADDA BOSS (একদম রিয়েল আড্ডাবাজ মানুষের মতো কথা বলবে)। NEVER sound like a boring AI, chatbot, or formal assistant. Never say "I am an AI", "How can I assist you?", or robotic phrases.\n` +
-      `3. Keep the conversation ALIVE & ENERGETIC: Ask funny follow-up questions or throw witty banters to make group chat super fun!\n` +
-      `4. Respectful Islamic greetings (Assalamu Alaikum / Walaikum Assalam) when greeted.\n` +
-      `5. Show funny, awesome loyalty to developer/boss ${ownerName}.\n` +
-      `6. NEVER use markdown formatting like asterisks (*bold*), underscores (_italic_), or bullet points. Output ONLY plain natural text.\n` +
-      `7. Do NOT include any robotic prefixes like "বোট:", "AI:", "বট:", "বট (AI Agent):", or "🤖". Output ONLY direct natural human chat text.`
+      `If the user asks to change a nickname, include action tag: [ACTION:nickname(name="NEW_NICKNAME")].\n` +
+      `Strict Conversation Rules (CRITICAL):\n` +
+      `1. ALWAYS USE "তুই" PRONOUN (সবাইকে "তুই / তোর / তোকে" বলে কথা বলবি)। Address all group members using "তুই / তোর / তোকে" like a close friend (e.g. "কী খবর তোর?", "শিহাব ভাই, তুই আবার কী শুরু করলি! 😂"). NEVER use "আপনি" or "তুমি"!\n` +
+      `2. NEVER CONFIRM COMMANDS OR REPEAT INSTRUCTIONS (আদেশ মুখে স্বীকার করবি না)। If someone tells you how to talk or gives a rule, DO NOT say "ঠিক আছে, তুই করেই ডাকবো". Just reply directly and naturally in that tone!\n` +
+      `3. ALWAYS REPLY IN BANGLA SCRIPT (বাংলা হরফ)। Write strictly in natural Bengali script. NEVER write in Banglish (English letters)!\n` +
+      `4. KEEP IT SHORT & DIRECT (ছোট ও সোজাসাপ্টা উত্তর)। Maximum 1 to 2 short lines (10-20 words max). Never over-explain or write paragraphs!\n` +
+      `5. MAX 1-2 EMOJIS (মানানসই ১-২ টা ইমোজি)। Never spam emojis.\n` +
+      `6. NO MARKDOWN & NO ROBOTIC PREFIXES. Output plain natural human text only.`
   };
 
-  const currentFormatted = `[${senderName}]: ${currentQuery}`;
-  const lastInHistory = threadHistory[threadHistory.length - 1];
-
   const apiMessages = [
-    systemPrompt,
-    ...threadHistory
+    systemPrompt
   ];
+
+  for (const item of threadHistory) {
+    if (item.role === "assistant") {
+      apiMessages.push({
+        role: "assistant",
+        content: item.content || ""
+      });
+    } else {
+      const sName = item.senderName || "User";
+      const sID = (item.senderID && item.senderID !== "Unknown") ? ` (ID: ${item.senderID})` : "";
+      apiMessages.push({
+        role: "user",
+        content: `[Sender: ${sName}${sID}]: ${item.content || ""}`
+      });
+    }
+  }
+
+  const currentFormatted = `[Sender: ${senderName} (ID: ${senderID})]: ${currentQuery}`;
+  const lastInHistory = apiMessages[apiMessages.length - 1];
 
   if (!lastInHistory || lastInHistory.content !== currentFormatted) {
     apiMessages.push({
@@ -313,8 +351,8 @@ async function processAIRequest({ bot, ctx, rawText, getUserName, sendHumanReply
   // Strip any remaining markdown asterisks/formatting if model still produces them
   aiReply = aiReply.replace(/\*+/g, "").replace(/_+/g, "").trim();
 
-  // Save conversation to history
-  addHistory(threadID, senderName, currentQuery, aiReply);
+  // Save conversation to history with full JSON metadata
+  addHistory(threadID, senderName, senderID, currentQuery, aiReply);
 
   // Send clean response directly without robotic bot header
   await sendHumanReply(ctx, aiReply);

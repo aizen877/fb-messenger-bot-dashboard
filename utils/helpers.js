@@ -52,7 +52,18 @@ function extractIDs(rawArray) {
 function getUserName(bot, userID, threadID = "") {
   return new Promise((resolve) => {
     if (!userID) return resolve("User Unknown");
-    const uidStr = String(userID);
+
+    // Safely extract string UID if object was passed
+    let uidStr = "";
+    if (typeof userID === "string" || typeof userID === "number") {
+      uidStr = String(userID).trim();
+    } else if (typeof userID === "object" && userID !== null) {
+      uidStr = String(userID.id || userID.userID || userID.user_id || userID.item || "").trim();
+    }
+
+    if (!uidStr || uidStr === "[object Object]") {
+      return resolve("User Unknown");
+    }
 
     if (userNameCache.has(uidStr)) {
       return resolve(userNameCache.get(uidStr));

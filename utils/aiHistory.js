@@ -4,7 +4,7 @@ const path = require("path");
 const DATA_DIR = path.join(__dirname, "../data");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
 
-const MAX_HISTORY = 8; // Keep 8 recent messages for sharp, clean context without clutter
+const MAX_MESSAGES = 8; // Keep 8 recent messages per thread for sharp, clean context
 const historyStore = new Map();
 
 // Ensure data directory exists
@@ -14,19 +14,47 @@ if (!fs.existsSync(DATA_DIR)) {
   } catch (e) {}
 }
 
-// Load existing history from history.json on startup
+function sanitizeNameArray(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(name => typeof name === "string" && name.trim() && !name.includes("[object Object]"));
+}
+
+/**
+ * Load existing history from history.json on startup & ensure full Group JSON structure
+ */
 function loadHistoryFromFile() {
   try {
     if (fs.existsSync(HISTORY_FILE)) {
       const fileData = fs.readFileSync(HISTORY_FILE, "utf8");
       if (fileData.trim()) {
         const json = JSON.parse(fileData);
-        for (const [threadID, history] of Object.entries(json)) {
-          if (Array.isArray(history)) {
-            historyStore.set(threadID, history);
+        for (const [threadID, data] of Object.entries(json)) {
+          if (Array.isArray(data)) {
+            // Legacy array format migration
+            historyStore.set(threadID, {
+              threadID,
+              threadType: "group",
+              groupName: "Messenger Group",
+              totalMembers: 0,
+              adminNames: [],
+              memberNames: [],
+              lastUpdated: new Date().toISOString(),
+              messages: data
+            });
+          } else if (typeof data === "object" && data !== null) {
+            historyStore.set(threadID, {
+              threadID: data.threadID || threadID,
+              threadType: data.threadType || "group",
+              groupName: data.groupName || "Messenger Group",
+              totalMembers: data.totalMembers || 0,
+              adminNames: sanitizeNameArray(data.adminNames),
+              memberNames: sanitizeNameArray(data.memberNames),
+              lastUpdated: data.lastUpdated || new Date().toISOString(),
+              messages: Array.isArray(data.messages) ? data.messages : []
+            });
           }
         }
-        console.log(`💾 [AI History]: Successfully loaded history for ${historyStore.size} thread(s) from history.json`);
+        console.log(`💾 [AI History]: Loaded rich JSON thread data for ${historyStore.size} thread(s) from history.json`);
       }
     }
   } catch (err) {
@@ -34,15 +62,15 @@ function loadHistoryFromFile() {
   }
 }
 
-// Save history map to history.json (debounced to avoid heavy disk I/O)
+// Debounced save to history.json
 let saveTimeout = null;
 function saveHistoryToFile() {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
     try {
       const obj = {};
-      for (const [threadID, history] of historyStore.entries()) {
-        obj[threadID] = history;
+      for (const [threadID, threadData] of historyStore.entries()) {
+        obj[threadID] = threadData;
       }
       fs.writeFileSync(HISTORY_FILE, JSON.stringify(obj, null, 2), "utf8");
     } catch (err) {
@@ -51,95 +79,153 @@ function saveHistoryToFile() {
   }, 300);
 }
 
-// Load history when module is initialized
+// Initialize on module load
 loadHistoryFromFile();
 
 /**
- * Gets conversation history array for a thread
+ * Gets or creates full thread JSON data structure
  * @param {string} threadID 
- * @returns {Array<{role: string, content: string}>}
+ * @returns {object} { threadID, threadType, groupName, totalMembers, adminNames, memberNames, lastUpdated, messages }
  */
-function getHistory(threadID) {
+function getThreadData(threadID) {
   if (!historyStore.has(threadID)) {
-    historyStore.set(threadID, []);
+    historyStore.set(threadID, {
+      threadID,
+      threadType: "group",
+      groupName: "Messenger Group",
+      totalMembers: 0,
+      adminNames: [],
+      memberNames: [],
+      lastUpdated: new Date().toISOString(),
+      messages: []
+    });
   }
   return historyStore.get(threadID);
 }
 
 /**
- * Record background group messages (even without mentioning AI) for thread context awareness
+ * Updates metadata for a thread (Group Name, Member Count, Admin Names, Member Names)
  * @param {string} threadID 
- * @param {string} senderName 
- * @param {string} text 
+ * @param {object} groupDetails 
  */
-function addBackgroundMessage(threadID, senderName, text) {
-  if (!threadID || !text) return;
-  const history = getHistory(threadID);
+function updateThreadMetadata(threadID, groupDetails = {}) {
+  if (!threadID) return;
+  const threadObj = getThreadData(threadID);
   
-  const newContent = `[${senderName}]: ${text}`;
-  const last = history[history.length - 1];
-
-  // Avoid duplicate entries
-  if (last && last.content === newContent) return;
-
-  history.push({
-    role: "user",
-    content: newContent
-  });
-
-  // Trim old history if exceeds limit
-  if (history.length > MAX_HISTORY) {
-    historyStore.set(threadID, history.slice(history.length - MAX_HISTORY));
-  }
-
+  if (groupDetails.groupName) threadObj.groupName = groupDetails.groupName;
+  if (groupDetails.threadType) threadObj.threadType = groupDetails.threadType;
+  if (typeof groupDetails.totalMembers === "number") threadObj.totalMembers = groupDetails.totalMembers;
+  if (Array.isArray(groupDetails.adminNames)) threadObj.adminNames = sanitizeNameArray(groupDetails.adminNames);
+  if (Array.isArray(groupDetails.memberNames)) threadObj.memberNames = sanitizeNameArray(groupDetails.memberNames);
+  
+  threadObj.lastUpdated = new Date().toISOString();
   saveHistoryToFile();
 }
 
 /**
- * Adds a user query and assistant response to history
+ * Gets messages array for a thread
  * @param {string} threadID 
- * @param {string} senderName 
- * @param {string} userText 
- * @param {string} assistantReply 
+ * @returns {Array}
  */
-function addHistory(threadID, senderName, userText, assistantReply) {
-  const history = getHistory(threadID);
-  const userContent = `[${senderName}]: ${userText}`;
-  const last = history[history.length - 1];
+function getHistory(threadID) {
+  return getThreadData(threadID).messages;
+}
 
-  // Only push user content if it wasn't already recorded by background message tracker
-  if (!last || last.content !== userContent) {
-    history.push({
+/**
+ * Record background group message to thread history
+ */
+function addBackgroundMessage(threadID, senderName, senderID, text) {
+  if (!threadID || !text) return;
+  const threadObj = getThreadData(threadID);
+  const messages = threadObj.messages;
+  
+  const cleanSenderName = senderName || "User";
+  const cleanSenderID = senderID ? String(senderID) : "Unknown";
+  
+  const last = messages[messages.length - 1];
+  if (last && last.role === "user" && last.content === text && last.senderName === cleanSenderName) {
+    return;
+  }
+
+  messages.push({
+    role: "user",
+    senderName: cleanSenderName,
+    senderID: cleanSenderID,
+    content: text,
+    timestamp: new Date().toISOString()
+  });
+
+  if (messages.length > MAX_MESSAGES) {
+    threadObj.messages = messages.slice(messages.length - MAX_MESSAGES);
+  }
+
+  threadObj.lastUpdated = new Date().toISOString();
+  saveHistoryToFile();
+}
+
+/**
+ * Record user query and assistant response to thread history
+ */
+function addHistory(threadID, senderName, senderID, userText, assistantReply) {
+  if (!threadID) return;
+  const threadObj = getThreadData(threadID);
+  const messages = threadObj.messages;
+  
+  const cleanSenderName = senderName || "User";
+  const cleanSenderID = senderID ? String(senderID) : "Unknown";
+  const last = messages[messages.length - 1];
+
+  if (!last || last.content !== userText || last.senderName !== cleanSenderName) {
+    messages.push({
       role: "user",
-      content: userContent
+      senderName: cleanSenderName,
+      senderID: cleanSenderID,
+      content: userText,
+      timestamp: new Date().toISOString()
     });
   }
 
-  history.push({
+  messages.push({
     role: "assistant",
-    content: assistantReply
+    senderName: process.env.BOT_NAME || "বল্টু",
+    senderID: "bot",
+    content: assistantReply,
+    timestamp: new Date().toISOString()
   });
 
-  // Trim old history if exceeds limit
-  if (history.length > MAX_HISTORY) {
-    historyStore.set(threadID, history.slice(history.length - MAX_HISTORY));
+  if (messages.length > MAX_MESSAGES) {
+    threadObj.messages = messages.slice(messages.length - MAX_MESSAGES);
   }
 
+  threadObj.lastUpdated = new Date().toISOString();
   saveHistoryToFile();
 }
 
 /**
- * Clears conversation history for a thread
- * @param {string} threadID 
+ * Clears conversation history & metadata for a single thread
  */
 function clearHistory(threadID) {
   historyStore.delete(threadID);
   saveHistoryToFile();
 }
 
+/**
+ * Clears history.json completely for a fresh clean start
+ */
+function clearAllHistory() {
+  historyStore.clear();
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify({}, null, 2), "utf8");
+    console.log("🧹 [AI History]: All history & group JSON records cleared!");
+  } catch (e) {}
+}
+
 module.exports = {
+  getThreadData,
+  updateThreadMetadata,
   getHistory,
   addBackgroundMessage,
   addHistory,
-  clearHistory
+  clearHistory,
+  clearAllHistory
 };
