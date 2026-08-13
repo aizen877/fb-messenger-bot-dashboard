@@ -5,6 +5,7 @@ const { createMessengerBot } = require("@dongdev/fca-unofficial");
 const { loadCommands } = require("./handlers/commandHandler");
 const { loadHears } = require("./handlers/hearsHandler");
 const { createDashboardServer } = require("./server/dashboard");
+const { clearAllHistory } = require("./utils/aiHistory");
 
 // Path & Environment configuration
 const appStatePath = path.resolve(process.env.APP_STATE_PATH || "./appstate.json");
@@ -222,7 +223,10 @@ async function startBotSession(newAppStateData) {
 }
 
 async function main() {
-  // 1. Launch Web Dashboard Express Server
+  // 1. Clear old conversation history on process startup for a fresh clean AI context
+  clearAllHistory();
+
+  // 2. Launch Web Dashboard Express Server
   createDashboardServer({
     getBotInstance: () => currentBot,
     onAppStateUpdate: (newAppState) => {

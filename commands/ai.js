@@ -157,7 +157,6 @@ async function processAIRequest({ bot, ctx, rawText, getUserName, sendHumanReply
   }
 
   const botName = process.env.BOT_NAME || "বল্টু";
-  const botPersonality = process.env.BOT_PERSONALITY || "Friendly, smart, helpful and witty assistant who converses fluently in Bengali and English.";
   const ownerName = process.env.BOT_OWNER || "শিহাব হোসেন";
   const ownerID = process.env.SUPER_ADMIN_ID || "61551005825239";
 
