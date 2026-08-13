@@ -1,0 +1,24 @@
+{
+  "name": "fb-messenger-bot",
+  "version": "1.0.0",
+  "description": "Anti-detection Facebook Messenger Bot built with @dongdev/fca-unofficial",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js"
+  },
+  "keywords": [
+    "facebook",
+    "messenger",
+    "bot",
+    "fca",
+    "anti-detection"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@dongdev/fca-unofficial": "^4.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1"
+  }
+}

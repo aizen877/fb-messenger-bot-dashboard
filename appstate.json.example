@@ -1,0 +1,35 @@
+[
+  {
+    "key": "c_user",
+    "value": "100000000000000",
+    "domain": ".facebook.com",
+    "path": "/",
+    "hostOnly": false,
+    "expirationDate": 1800000000,
+    "secure": true,
+    "httpOnly": true,
+    "sameSite": "none"
+  },
+  {
+    "key": "xs",
+    "value": "SAMPLE_XS_COOKIE_VALUE",
+    "domain": ".facebook.com",
+    "path": "/",
+    "hostOnly": false,
+    "expirationDate": 1800000000,
+    "secure": true,
+    "httpOnly": true,
+    "sameSite": "none"
+  },
+  {
+    "key": "datr",
+    "value": "SAMPLE_DATR_COOKIE_VALUE",
+    "domain": ".facebook.com",
+    "path": "/",
+    "hostOnly": false,
+    "expirationDate": 1800000000,
+    "secure": true,
+    "httpOnly": true,
+    "sameSite": "none"
+  }
+]

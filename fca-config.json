@@ -1,0 +1,20 @@
+{
+  "autoUpdate": false,
+  "checkUpdate": {
+    "enabled": false,
+    "install": false,
+    "notifyIfCurrent": false,
+    "packageName": "@dongdev/fca-unofficial",
+    "registryUrl": "https://registry.npmjs.org",
+    "timeoutMs": 10000
+  },
+  "mqtt": {
+    "enabled": true,
+    "reconnectInterval": 3600
+  },
+  "autoLogin": false,
+  "antiGetInfo": {
+    "AntiGetThreadInfo": false,
+    "AntiGetUserInfo": true
+  }
+}

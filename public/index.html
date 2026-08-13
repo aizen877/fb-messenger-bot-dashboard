@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messenger Bot Dashboard & Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Authentication Modal -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="brand-logo">
+          <i class="fa-solid fa-robot"></i>
+        </div>
+        <h2>Bot Admin Access</h2>
+        <p>Enter your Web Admin Password to manage your bot and AppState</p>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="adminPassword"><i class="fa-solid fa-key"></i> Admin Password</label>
+          <input type="password" id="adminPassword" placeholder="Enter password (default: admin123)" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-right-to-bracket"></i> Unlock Dashboard
+        </button>
+      </form>
+      <div id="authError" class="alert alert-error hidden"></div>
+    </div>
+  </div>
+
+  <!-- Main App Layout -->
+  <div id="appLayout" class="app-container hidden">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <div class="brand-text">
+          <span class="title" id="sideBotName">Messenger Bot</span>
+          <span class="subtitle">Cloud Dashboard</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="overview">
+          <i class="fa-solid fa-chart-line"></i> Overview
+        </button>
+        <button class="nav-item" data-tab="appstate">
+          <i class="fa-solid fa-cookie-bite"></i> AppState (Cookies)
+        </button>
+        <button class="nav-item" data-tab="config">
+          <i class="fa-solid fa-sliders"></i> Bot Configuration
+        </button>
+        <button class="nav-item" data-tab="logs">
+          <i class="fa-solid fa-terminal"></i> Live Console Logs
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-indicator">
+          <span class="status-dot offline" id="statusDot"></span>
+          <span class="status-text" id="statusText">Checking...</span>
+        </div>
+        <button id="logoutBtn" class="btn btn-icon" title="Logout">
+          <i class="fa-solid fa-power-off"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Navbar -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1 id="pageTitle">Dashboard Overview</h1>
+          <span class="badge badge-koyeb"><i class="fa-solid fa-cloud"></i> Koyeb Ready</span>
+        </div>
+        <div class="topbar-actions">
+          <button id="refreshStatsBtn" class="btn btn-outline btn-sm">
+            <i class="fa-solid fa-rotate"></i> Refresh
+          </button>
+          <button id="restartBotBtn" class="btn btn-warning btn-sm">
+            <i class="fa-solid fa-arrows-rotate"></i> Restart Bot
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB 1: Overview -->
+      <section id="tab-overview" class="tab-content active">
+        <div class="grid-cards">
+          <!-- Status Card -->
+          <div class="card stat-card">
+            <div class="stat-icon bg-blue">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Bot Status</span>
+              <h3 class="stat-value" id="botStatusVal">Checking...</h3>
+              <span class="stat-sub" id="botUserVal">User ID: --</span>
+            </div>
+          </div>
+
+          <!-- AppState Card -->
+          <div class="card stat-card">
+            <div class="stat-icon bg-purple">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">AppState Cookies</span>
+              <h3 class="stat-value" id="appStateCountVal">--</h3>
+              <span class="stat-sub" id="appStateDateVal">Last updated: --</span>
+            </div>
+          </div>
+
+          <!-- Uptime Card -->
+          <div class="card stat-card">
+            <div class="stat-icon bg-green">
+              <i class="fa-solid fa-clock"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Bot Uptime</span>
+              <h3 class="stat-value" id="uptimeVal">0m 0s</h3>
+              <span class="stat-sub">Running continuously</span>
+            </div>
+          </div>
+
+          <!-- System Memory Card -->
+          <div class="card stat-card">
+            <div class="stat-icon bg-orange">
+              <i class="fa-solid fa-microchip"></i>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">RAM Memory</span>
+              <h3 class="stat-value" id="ramVal">-- MB</h3>
+              <span class="stat-sub" id="ramTotalVal">Total: -- MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bot Identity & Quick Controls -->
+        <div class="grid-two-col">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-circle-info"></i> Bot Overview & Information</h3>
+            </div>
+            <div class="card-body">
+              <div class="info-list">
+                <div class="info-item">
+                  <span class="info-label">Bot Display Name:</span>
+                  <span class="info-val" id="infoBotName">--</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Command Prefix:</span>
+                  <span class="info-val code" id="infoPrefix">/</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Facebook User ID:</span>
+                  <span class="info-val" id="infoUserID">--</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Active Group Thread:</span>
+                  <span class="info-val" id="infoThreadID">None</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Node.js Version:</span>
+                  <span class="info-val" id="infoNodeVer">--</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Health Check URL:</span>
+                  <span class="info-val code"><a href="/health" target="_blank">/health</a></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-cloud-arrow-up"></i> Koyeb Deployment Checklist</h3>
+            </div>
+            <div class="card-body">
+              <div class="checklist">
+                <div class="check-item done">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span>Integrated Express Web Server</span>
+                </div>
+                <div class="check-item done">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span>Health Check Probe (/health)</span>
+                </div>
+                <div class="check-item done">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span>Password Protected Web UI</span>
+                </div>
+                <div class="check-item done">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span>Live AppState & Session Refresh</span>
+                </div>
+                <div class="check-item done">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span>Auto Cookie Save Every 20 Mins</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: AppState Editor -->
+      <section id="tab-appstate" class="tab-content">
+        <div class="card">
+          <div class="card-header flex-between">
+            <div>
+              <h3><i class="fa-solid fa-cookie-bite"></i> AppState (Facebook Cookies) Manager</h3>
+              <p class="card-subtitle">
+                Facebook cookies (appstate.json) মাঝে মাঝে মেয়াদ শেষ হয়ে গেলে এখান থেকে সরাসরি আপডেট করুন।
+              </p>
+            </div>
+            <div class="header-actions">
+              <input type="file" id="appstateFileInput" accept=".json" class="hidden">
+              <button id="uploadAppStateBtn" class="btn btn-outline btn-sm">
+                <i class="fa-solid fa-upload"></i> Upload File
+              </button>
+              <button id="formatJsonBtn" class="btn btn-outline btn-sm">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Format JSON
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="appstate-status-bar">
+              <div class="status-pill">
+                <span class="label">Cookie Count:</span>
+                <span class="value" id="editorCookieCount">0</span>
+              </div>
+              <div class="status-pill">
+                <span class="label">c_user (User ID):</span>
+                <span class="value" id="editorCUser">Not detected</span>
+              </div>
+              <div class="status-pill">
+                <span class="label">Status:</span>
+                <span class="value text-success" id="editorStatus">Valid Array</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="appstateTextarea">Paste full appstate.json array content below:</label>
+              <textarea id="appstateTextarea" class="code-editor" rows="18" placeholder="[\n  {\n    'key': 'c_user',\n    'value': '1000...'\n  }\n]"></textarea>
+            </div>
+
+            <div class="form-actions flex-between">
+              <span class="help-text"><i class="fa-solid fa-lightbulb"></i> Export cookies using c3c-fbstate Chrome Extension and paste above.</span>
+              <button id="saveAppStateBtn" class="btn btn-success">
+                <i class="fa-solid fa-floppy-disk"></i> Save & Live Reload Session
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: Bot Configuration -->
+      <section id="tab-config" class="tab-content">
+        <div class="card">
+          <div class="card-header flex-between">
+            <div>
+              <h3><i class="fa-solid fa-sliders"></i> Environment & Bot Settings (.env)</h3>
+              <p class="card-subtitle">বটের নাম, প্রিফিক্স, AI পার্সোনালিটি এবং ড্যাশবোর্ড পাসওয়ার্ড এখান থেকে আপডেট করুন।</p>
+            </div>
+            <div class="tab-subnav">
+              <button class="subtab-btn active" id="subtabForm">Form View</button>
+              <button class="subtab-btn" id="subtabRaw">Raw .env View</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Form View -->
+            <form id="configForm">
+              <div class="grid-two-col">
+                <div class="form-group">
+                  <label for="cfg_BOT_NAME">Bot Display Name (BOT_NAME)</label>
+                  <input type="text" id="cfg_BOT_NAME" class="form-control" placeholder="তাহমিদ">
+                </div>
+                <div class="form-group">
+                  <label for="cfg_COMMAND_PREFIX">Command Prefix (COMMAND_PREFIX)</label>
+                  <input type="text" id="cfg_COMMAND_PREFIX" class="form-control" placeholder="/">
+                </div>
+              </div>
+
+              <div class="grid-two-col">
+                <div class="form-group">
+                  <label for="cfg_SUPER_ADMIN_ID">Super Admin Facebook ID (SUPER_ADMIN_ID)</label>
+                  <input type="text" id="cfg_SUPER_ADMIN_ID" class="form-control" placeholder="61551005825239">
+                </div>
+                <div class="form-group">
+                  <label for="cfg_BOT_OWNER">Bot Owner Name (BOT_OWNER)</label>
+                  <input type="text" id="cfg_BOT_OWNER" class="form-control" placeholder="শিহাব হোসেন">
+                </div>
+              </div>
+
+              <div class="grid-two-col">
+                <div class="form-group">
+                  <label for="cfg_WEB_ADMIN_PASSWORD">Dashboard Password (WEB_ADMIN_PASSWORD)</label>
+                  <input type="password" id="cfg_WEB_ADMIN_PASSWORD" class="form-control" placeholder="admin123">
+                </div>
+                <div class="form-group">
+                  <label for="cfg_PORT">Server Web Port (PORT)</label>
+                  <input type="number" id="cfg_PORT" class="form-control" placeholder="3000">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="cfg_BOT_PERSONALITY">AI Bot Personality Prompt (BOT_PERSONALITY)</label>
+                <textarea id="cfg_BOT_PERSONALITY" class="form-control" rows="4"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="cfg_ONEHOP_API_KEYS">OneHop AI API Keys (Comma separated for dual load balancer)</label>
+                <input type="text" id="cfg_ONEHOP_API_KEYS" class="form-control" placeholder="oh_live_key1,oh_live_key2">
+              </div>
+
+              <div class="grid-three-col">
+                <div class="form-group">
+                  <label for="cfg_MIN_TYPING_DELAY_MS">Min Typing Delay (ms)</label>
+                  <input type="number" id="cfg_MIN_TYPING_DELAY_MS" class="form-control" placeholder="2000">
+                </div>
+                <div class="form-group">
+                  <label for="cfg_MAX_TYPING_DELAY_MS">Max Typing Delay (ms)</label>
+                  <input type="number" id="cfg_MAX_TYPING_DELAY_MS" class="form-control" placeholder="5000">
+                </div>
+                <div class="form-group">
+                  <label for="cfg_CHARS_PER_SECOND">Chars Per Second</label>
+                  <input type="number" id="cfg_CHARS_PER_SECOND" class="form-control" placeholder="12">
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                  <i class="fa-solid fa-floppy-disk"></i> Save Configuration
+                </button>
+              </div>
+            </form>
+
+            <!-- Raw .env View -->
+            <div id="rawEnvView" class="hidden">
+              <div class="form-group">
+                <label for="rawEnvTextarea">Raw .env File Content:</label>
+                <textarea id="rawEnvTextarea" class="code-editor" rows="18"></textarea>
+              </div>
+              <div class="form-actions">
+                <button id="saveRawEnvBtn" class="btn btn-primary">
+                  <i class="fa-solid fa-floppy-disk"></i> Save Raw .env
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: Live Console Logs -->
+      <section id="tab-logs" class="tab-content">
+        <div class="card">
+          <div class="card-header flex-between">
+            <div>
+              <h3><i class="fa-solid fa-terminal"></i> Live Console Terminal Logs</h3>
+              <p class="card-subtitle">Real-time output stream from bot execution</p>
+            </div>
+            <div class="header-actions">
+              <button id="clearLogsBtn" class="btn btn-outline btn-sm">
+                <i class="fa-solid fa-trash-can"></i> Clear Screen
+              </button>
+              <label class="toggle-switch">
+                <input type="checkbox" id="autoScrollLogs" checked>
+                <span class="slider"></span> Auto Scroll
+              </label>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="terminal-screen" id="logTerminal">
+              <div class="log-line info">[System]: Dashboard terminal initialized. Waiting for bot events...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

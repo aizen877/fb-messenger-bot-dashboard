@@ -1,0 +1,70 @@
+const fs = require("fs");
+const path = require("path");
+const { sendHumanReply } = require("../utils/antiDetect");
+const { SUPER_ADMIN_ID, getThreadAdminIDs, getThreadDetails, getUserName, isBotAdmin, downloadTempImage } = require("../utils/helpers");
+
+/**
+ * Dynamically loads and registers all command files from the commands directory
+ * @param {object} bot - MessengerBot instance
+ * @param {string} commandPrefix - Command prefix (e.g. "/")
+ */
+function loadCommands(bot, commandPrefix = "/") {
+  const commandsDir = path.join(__dirname, "../commands");
+  if (!fs.existsSync(commandsDir)) {
+    console.warn("⚠️ Commands directory does not exist:", commandsDir);
+    return;
+  }
+
+  const files = fs.readdirSync(commandsDir).filter((f) => f.endsWith(".js"));
+  let loadedCount = 0;
+
+  for (const file of files) {
+    try {
+      const commandPath = path.join(commandsDir, file);
+      // Clear require cache for dynamic reloading support
+      delete require.cache[require.resolve(commandPath)];
+      const cmd = require(commandPath);
+
+      if (!cmd || !cmd.name || typeof cmd.execute !== "function") {
+        console.warn(`⚠️ Invalid command structure in ${file}. Skipping.`);
+        continue;
+      }
+
+      const names = [cmd.name, ...(cmd.aliases || [])];
+      
+      names.forEach((cmdName) => {
+        bot.command(cmdName, async (ctx) => {
+          try {
+            const rawText = ctx.text || "";
+            const parts = rawText.split(/\s+/);
+            const args = parts.slice(1);
+
+            await cmd.execute({
+              bot,
+              ctx,
+              args,
+              commandPrefix,
+              sendHumanReply: (c, payload) => sendHumanReply(bot, c || ctx, payload),
+              getThreadAdminIDs: (tID) => getThreadAdminIDs(bot, tID),
+              getThreadDetails: (tID) => getThreadDetails(bot, tID),
+              getUserName: (uID, tID) => getUserName(bot, uID, tID || ctx.threadID),
+              isBotAdmin: (tID) => isBotAdmin(bot, tID || ctx.threadID),
+              SUPER_ADMIN_ID,
+              downloadTempImage
+            });
+          } catch (err) {
+            console.error(`❌ Error executing command /${cmdName}:`, err.message);
+          }
+        });
+      });
+
+      loadedCount++;
+    } catch (err) {
+      console.error(`❌ Failed to load command file ${file}:`, err.message);
+    }
+  }
+
+  console.log(`📦 Successfully loaded ${loadedCount} command module(s) [${files.length} file(s)].`);
+}
+
+module.exports = { loadCommands };

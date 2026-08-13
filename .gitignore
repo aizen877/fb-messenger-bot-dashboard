@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment and sensitive credentials
+.env
+appstate.json
+appstate_backup.json
+data/
+
+# Local Databases & Logs
+*.db
+*.sqlite
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
