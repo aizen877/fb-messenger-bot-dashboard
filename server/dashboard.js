@@ -252,8 +252,8 @@ function createDashboardServer({ getBotInstance, onAppStateUpdate, onRestartBot 
   });
 
   // Serve SPA index.html for all non-API GET requests
-  app.get("*", (req, res) => {
-    if (!req.path.startsWith("/api")) {
+  app.use((req, res) => {
+    if (req.method === "GET" && !req.path.startsWith("/api")) {
       res.sendFile(path.join(publicPath, "index.html"));
     } else {
       res.status(404).json({ error: "Endpoint not found" });
