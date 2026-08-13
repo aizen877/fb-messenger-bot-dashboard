@@ -45,10 +45,10 @@ function loadCommands(bot, commandPrefix = "/") {
               args,
               commandPrefix,
               sendHumanReply: (c, payload) => sendHumanReply(bot, c || ctx, payload),
-              getThreadAdminIDs: (tID) => getThreadAdminIDs(bot, tID),
-              getThreadDetails: (tID) => getThreadDetails(bot, tID),
-              getUserName: (uID, tID) => getUserName(bot, uID, tID || ctx.threadID),
-              isBotAdmin: (tID) => isBotAdmin(bot, tID || ctx.threadID),
+              getThreadAdminIDs: (a1, a2) => getThreadAdminIDs(bot, typeof a1 === "string" ? a1 : a2),
+              getThreadDetails: (a1, a2) => getThreadDetails(bot, typeof a1 === "string" ? a1 : a2),
+              getUserName: (a1, a2, a3) => getUserName(bot, typeof a1 === "string" ? a1 : a2, typeof a2 === "string" ? a2 : a3 || ctx.threadID),
+              isBotAdmin: (a1, a2) => isBotAdmin(bot, typeof a1 === "string" ? a1 : a2 || ctx.threadID),
               SUPER_ADMIN_ID,
               downloadTempImage
             });

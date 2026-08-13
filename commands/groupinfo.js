@@ -10,7 +10,7 @@ module.exports = {
         return await sendHumanReply(ctx, "❌ এই কমান্ডটি শুধুমাত্র ফেসবুক গ্রুপ চ্যাটে কাজ করবে!");
       }
 
-      const details = await getThreadDetails(bot, threadID);
+      const details = await getThreadDetails(threadID);
       const totalMembers = details.participantIDs ? details.participantIDs.length : 0;
       const totalAdmins = details.adminIDs ? details.adminIDs.length : 0;
 

@@ -5,6 +5,61 @@ const https = require("https");
 // Master Super Admin ID
 const SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID || "61551005825239";
 
+const userNameCache = new Map();
+const threadDetailsCache = new Map();
+
+/**
+ * Cache a user's full name manually into memory store
+ * @param {string} userID 
+ * @param {string} name 
+ */
+function cacheUserName(userID, name) {
+  if (userID && name && !String(name).startsWith("User ")) {
+    userNameCache.set(String(userID), String(name));
+  }
+}
+
+/**
+ * Helper to fetch user's full name safely with in-memory caching and FCA getUserInfo fallback
+ * @param {object} bot - MessengerBot instance
+ * @param {string} userID - Facebook User ID
+ * @param {string} threadID - Optional thread ID context
+ * @returns {Promise<string>}
+ */
+function getUserName(bot, userID, threadID = "") {
+  return new Promise((resolve) => {
+    if (!userID) return resolve("User Unknown");
+    const uidStr = String(userID);
+
+    if (userNameCache.has(uidStr)) {
+      return resolve(userNameCache.get(uidStr));
+    }
+
+    const fallbackName = `User ${uidStr}`;
+
+    if (bot && bot.api && typeof bot.api.getUserInfo === "function") {
+      try {
+        bot.api.getUserInfo(uidStr, (err, ret) => {
+          if (!err && ret && ret[uidStr]) {
+            const uData = ret[uidStr];
+            const fetchedName = uData.name || uData.firstName || uData.alternateName;
+            if (fetchedName) {
+              userNameCache.set(uidStr, fetchedName);
+              return resolve(fetchedName);
+            }
+          }
+          resolve(fallbackName);
+        });
+        return;
+      } catch (e) {
+        return resolve(fallbackName);
+      }
+    }
+
+    resolve(fallbackName);
+  });
+}
+
 /**
  * Helper to fetch thread admin IDs with multiple fallback layers
  * @param {object} bot - MessengerBot instance
@@ -12,65 +67,11 @@ const SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID || "61551005825239";
  * @returns {Promise<Array<string>>}
  */
 function getThreadAdminIDs(bot, threadID) {
-  return new Promise((resolve) => {
-    if (!bot || !threadID) return resolve([]);
-
-    // 1. Try bot.api.getThreadInfo with callback
-    if (bot.api && typeof bot.api.getThreadInfo === "function") {
-      bot.api.getThreadInfo(threadID, (err, info) => {
-        if (!err && info) {
-          const rawAdmins = info.adminIDs || info.admin_ids || info.threadAdmins || info.thread_admins || [];
-          const ids = rawAdmins
-            .map((item) => {
-              if (typeof item === "object" && item !== null) {
-                return String(item.id || item.userID || item.user_id || "");
-              }
-              return String(item);
-            })
-            .filter(Boolean);
-
-          if (ids.length > 0) return resolve(ids);
-        }
-
-        // Fallback 2: Try bot.client.threads.getInfo
-        if (bot.client?.threads?.getInfo) {
-          bot.client.threads.getInfo(threadID)
-            .then((clientInfo) => {
-              const rawAdmins = clientInfo?.adminIDs || clientInfo?.admin_ids || clientInfo?.threadAdmins || [];
-              const ids = rawAdmins
-                .map((item) => (typeof item === "object" && item !== null ? String(item.id || item.userID || "") : String(item)))
-                .filter(Boolean);
-              resolve(ids);
-            })
-            .catch(() => resolve([]));
-        } else {
-          resolve([]);
-        }
-      });
-      return;
-    }
-
-    // Fallback 3: Try bot.client.threads.getInfo directly
-    if (bot.client?.threads?.getInfo) {
-      bot.client.threads.getInfo(threadID)
-        .then((clientInfo) => {
-          const rawAdmins = clientInfo?.adminIDs || clientInfo?.admin_ids || clientInfo?.threadAdmins || [];
-          const ids = rawAdmins
-            .map((item) => (typeof item === "object" && item !== null ? String(item.id || item.userID || "") : String(item)))
-            .filter(Boolean);
-          resolve(ids);
-        })
-        .catch(() => resolve([]));
-    } else {
-      resolve([]);
-    }
-  });
+  return getThreadDetails(bot, threadID).then(details => details.adminIDs || []);
 }
 
-const threadDetailsCache = new Map();
-
 /**
- * Helper to fetch complete thread details (Name, Members, Admins) with 5-minute caching
+ * Helper to fetch complete thread details (Name, Members, Admins) with fallback layers
  * @param {object} bot - MessengerBot instance
  * @param {string} threadID - Facebook Thread ID
  * @returns {Promise<{name: string, participantIDs: Array<string>, adminIDs: Array<string>, userInfo: Array<object>}>}
@@ -87,68 +88,105 @@ function getThreadDetails(bot, threadID) {
     if (!bot || !threadID) return resolve(fallback);
     const tID = String(threadID);
 
-    // Return cached thread details if valid and fetched within last 30 minutes
+    // Check cache (TTL 2 minutes, ONLY if valid data exists)
     if (threadDetailsCache.has(tID)) {
       const cached = threadDetailsCache.get(tID);
-      if (Date.now() - cached.timestamp < 30 * 60 * 1000) {
+      if (Date.now() - cached.timestamp < 2 * 60 * 1000 && (cached.data.participantIDs.length > 0 || cached.data.adminIDs.length > 0)) {
         return resolve(cached.data);
       }
     }
 
-    if (bot.api && typeof bot.api.getThreadInfo === "function") {
-      bot.api.getThreadInfo(tID, (err, info) => {
-        if (err || !info) {
-          // Cache fallback to prevent spamming getThreadInfo when GraphQL fails (e.g. DMs)
-          threadDetailsCache.set(tID, { timestamp: Date.now(), data: fallback });
-          return resolve(fallback);
-        }
+    const parseInfo = (info) => {
+      if (!info) return null;
 
-        const rawAdmins = info.adminIDs || info.admin_ids || info.threadAdmins || info.thread_admins || [];
-        const adminIDs = rawAdmins
-          .map((item) => (typeof item === "object" && item !== null ? String(item.id || item.userID || "") : String(item)))
-          .filter(Boolean);
+      const rawAdmins = info.adminIDs || info.admin_ids || info.threadAdmins || info.thread_admins || [];
+      let adminIDs = rawAdmins
+        .map((item) => (typeof item === "object" && item !== null ? String(item.id || item.userID || item.user_id || "") : String(item)))
+        .filter(Boolean);
 
-        const rawParticipants = info.participantIDs || info.participant_ids || info.members || [];
-        const participantIDs = rawParticipants
-          .map((item) => (typeof item === "object" && item !== null ? String(item.id || item.userID || "") : String(item)))
-          .filter(Boolean);
+      const userInfo = Array.isArray(info.userInfo) ? info.userInfo : [];
 
-        const userInfo = Array.isArray(info.userInfo) ? info.userInfo : [];
-
-        // Cache resolved user names automatically
-        for (const u of userInfo) {
-          if (u.id && (u.name || u.firstName)) {
-            userNameCache.set(String(u.id), u.name || u.firstName);
+      // Extract user names and check admin status from userInfo array
+      for (const u of userInfo) {
+        if (u.id) {
+          const uID = String(u.id);
+          if (u.name || u.firstName) {
+            cacheUserName(uID, u.name || u.firstName);
+          }
+          if ((u.type === "admin" || u.isAdmin || u.isGroupAdmin) && !adminIDs.includes(uID)) {
+            adminIDs.push(uID);
           }
         }
+      }
 
-        const result = {
-          name: info.threadName || info.name || "Chat Thread",
-          participantIDs: participantIDs.length > 0 ? participantIDs : userInfo.map((u) => String(u.id)),
-          adminIDs,
-          userInfo
-        };
+      const rawParticipants = info.participantIDs || info.participant_ids || info.members || info.recipients || [];
+      let participantIDs = rawParticipants
+        .map((item) => (typeof item === "object" && item !== null ? String(item.id || item.userID || item.user_id || "") : String(item)))
+        .filter(Boolean);
 
-        threadDetailsCache.set(tID, { timestamp: Date.now(), data: result });
-        resolve(result);
-      });
-    } else {
-      resolve(fallback);
+      if (participantIDs.length === 0 && userInfo.length > 0) {
+        participantIDs = userInfo.map((u) => String(u.id));
+      }
+
+      return {
+        name: info.threadName || info.name || "Chat Thread",
+        participantIDs,
+        adminIDs,
+        userInfo
+      };
+    };
+
+    // Primary Attempt: bot.api.getThreadInfo
+    if (bot.api && typeof bot.api.getThreadInfo === "function") {
+      try {
+        bot.api.getThreadInfo(tID, (err, info) => {
+          const parsed = parseInfo(info);
+          if (parsed && (parsed.participantIDs.length > 0 || parsed.adminIDs.length > 0)) {
+            threadDetailsCache.set(tID, { timestamp: Date.now(), data: parsed });
+            return resolve(parsed);
+          }
+
+          // Fallback Attempt 2: Try bot.client.threads.getInfo if available
+          if (bot.client?.threads?.getInfo) {
+            bot.client.threads.getInfo(tID)
+              .then((clientInfo) => {
+                const cParsed = parseInfo(clientInfo);
+                if (cParsed && (cParsed.participantIDs.length > 0 || cParsed.adminIDs.length > 0)) {
+                  threadDetailsCache.set(tID, { timestamp: Date.now(), data: cParsed });
+                  return resolve(cParsed);
+                }
+                resolve(fallback);
+              })
+              .catch(() => resolve(fallback));
+            return;
+          }
+
+          resolve(fallback);
+        });
+        return;
+      } catch (e) {
+        resolve(fallback);
+        return;
+      }
     }
+
+    // Fallback Attempt 3: bot.client.threads.getInfo direct
+    if (bot.client?.threads?.getInfo) {
+      bot.client.threads.getInfo(tID)
+        .then((clientInfo) => {
+          const cParsed = parseInfo(clientInfo);
+          if (cParsed && (cParsed.participantIDs.length > 0 || cParsed.adminIDs.length > 0)) {
+            threadDetailsCache.set(tID, { timestamp: Date.now(), data: cParsed });
+            return resolve(cParsed);
+          }
+          resolve(fallback);
+        })
+        .catch(() => resolve(fallback));
+      return;
+    }
+
+    resolve(fallback);
   });
-}
-
-const userNameCache = new Map();
-
-/**
- * Cache a user's full name manually into memory store
- * @param {string} userID 
- * @param {string} name 
- */
-function cacheUserName(userID, name) {
-  if (userID && name && !String(name).startsWith("User ")) {
-    userNameCache.set(String(userID), name);
-  }
 }
 
 /**
@@ -160,33 +198,12 @@ function cacheUserName(userID, name) {
 async function isBotAdmin(bot, threadID) {
   if (!bot || !threadID) return false;
   try {
-    const currentBotID = bot.api?.getCurrentUserID ? String(bot.api.getCurrentUserID()) : "100093356786348";
+    const currentBotID = bot.api?.getCurrentUserID ? String(bot.api.getCurrentUserID()) : "";
     const adminIDs = await getThreadAdminIDs(bot, threadID);
     return adminIDs.includes(currentBotID);
   } catch (e) {
     return false;
   }
-}
-
-/**
- * Helper to fetch user's full name safely with in-memory caching and zero session blocks
- * @param {object} bot - MessengerBot instance
- * @param {string} userID - Facebook User ID
- * @param {string} threadID - Optional thread ID context
- * @returns {Promise<string>}
- */
-function getUserName(bot, userID, threadID = "") {
-  return new Promise((resolve) => {
-    if (!userID) return resolve("User Unknown");
-    const uidStr = String(userID);
-
-    if (userNameCache.has(uidStr)) {
-      return resolve(userNameCache.get(uidStr));
-    }
-
-    const fallbackName = `User ${uidStr}`;
-    resolve(fallbackName);
-  });
 }
 
 /**
